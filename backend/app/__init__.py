@@ -1,6 +1,6 @@
 from flask import Flask
 from app.config import config
-from app.extensions import cors
+from app.extensions import cors, db, migrate
 
 def create_app(config_name='default'):
     """
@@ -16,6 +16,11 @@ def create_app(config_name='default'):
 
     # 初始化扩展
     cors.init_app(app)
+    db.init_app(app)
+    migrate.init_app(app, db)
+
+    # 导入模型以确保迁移工具能检测到
+    from app import models
 
     # 注册蓝图
     from app.api.routes import main_bp
