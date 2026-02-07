@@ -10,6 +10,9 @@ def create_app(config_name='default'):
     """
     app = Flask(__name__)
     app.config.from_object(config[config_name])
+    
+    # 解决中文乱码问题
+    app.json.ensure_ascii = False
 
     # 初始化扩展
     cors.init_app(app)
