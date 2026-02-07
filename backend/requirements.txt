@@ -1,0 +1,12 @@
+Flask>=3.0.0
+flask-cors
+gunicorn
+python-dotenv
+langchain
+openai
+celery
+redis
+elasticsearch
+psycopg2-binary
+minio
+chromadb
