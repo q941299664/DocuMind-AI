@@ -1,7 +1,11 @@
 Flask>=3.0.0
 flask-cors
+flask-jwt-extended
+flask-mail
 gunicorn
 python-dotenv
+pydantic
+email-validator
 langchain
 openai
 celery
