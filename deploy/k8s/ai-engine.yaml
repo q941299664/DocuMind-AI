@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: documind-ai-engine
+  labels:
+    app: documind-ai-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: documind-ai-engine
+  template:
+    metadata:
+      labels:
+        app: documind-ai-engine
+    spec:
+      containers:
+      - name: ai-engine
+        image: demotao.top:5000/documind/ai-engine:latest
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "300m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: documind-ai-engine
+spec:
+  selector:
+    app: documind-ai-engine
+  ports:
+  - port: 8000
+    targetPort: 8000

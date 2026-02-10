@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: documind-backend
+  labels:
+    app: documind-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: documind-backend
+  template:
+    metadata:
+      labels:
+        app: documind-backend
+    spec:
+      containers:
+      - name: backend
+        image: demotao.top:5000/documind/backend:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "prod"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: documind-backend
+spec:
+  selector:
+    app: documind-backend
+  ports:
+  - port: 8080
+    targetPort: 8080
