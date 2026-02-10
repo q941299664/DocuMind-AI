@@ -1,68 +1,58 @@
-# 技术架构 (Architecture)
+# 系统架构设计 (Architecture)
 
-## 系统概览
+## 1. 架构概览
 
-DocuMind-AI 采用经典的前后端分离架构，通过 RESTful API 进行通信。系统的核心设计原则是**模块化**和**用户隔离**。
+DocuMind AI 采用**前后端分离** + **微服务**的混合架构。
 
-```mermaid
-graph TD
-    User[用户] --> |HTTP/HTTPS| FE[前端-React]
-    FE --> |REST API + JWT| Gateway[API 网关/Nginx]
-    Gateway --> BE[后端-Flask API]
-    
-    subgraph Backend_Services [后端服务]
-        BE --> Auth[认证服务]
-        BE --> DocService[文档服务]
-        BE --> RAGService[RAG 引擎]
-        BE --> TaskQueue[任务队列-Celery]
-    end
-    
-    subgraph Data_Layer [数据存储]
-        Auth --> DB[(PostgreSQL)]
-        DocService --> DB
-        DocService --> ObjStore[对象存储-MinIO]
-        RAGService --> VectorDB[(向量数据库 ChromaDB)]
-        TaskQueue --> Redis[Redis Broker/Cache]
-    end
-```
+- **Frontend (React)**: 负责 UI 渲染和 PDF 交互。
+- **Backend Service (Java Spring Boot)**: 核心业务网关，处理 CRUD、用户认证、权限管理。
+- **AI Engine (Python Flask)**: 专注于 RAG（检索增强生成）、LLM 调用和向量计算。
+- **Infrastructure**: MySQL (业务数据), Redis (缓存), RabbitMQ (异步通信), VectorDB (向量存储).
 
-## 核心组件
+## 2. 服务职责
 
-### 1. 前端 (Frontend)
-- **技术栈**: React, Vite, TailwindCSS, Axios.
-- **职责**: 用户界面交互，文件上传，聊天窗口，Token 管理。
+### 2.1 Backend Service (Java)
+- **API Gateway**: 统一对外暴露 RESTful 接口。
+- **User Center**: 用户注册、登录、JWT 签发与校验。
+- **Document Management**: PDF 文件的上传元数据管理、CRUD 操作。
+- **Task Dispatch**: 将耗时的 AI 任务（如 PDF 解析、摘要生成）发送至消息队列。
 
-### 2. 后端 API (Backend API)
-- **技术栈**: Python, Flask, Gunicorn.
-- **职责**: 
-    - 处理 HTTP 请求。
-    - **鉴权 (Authorization)**: 验证 JWT，确保用户只能访问自己的资源 (`user_id` 过滤)。
-    - 业务逻辑编排。
+### 2.2 AI Engine (Python)
+- **Worker Mode**: 监听 RabbitMQ 队列，处理异步任务。
+- **RAG Service**: 
+    - 文档切片 (Chunking)
+    - 向量化 (Embedding)
+    - 向量检索 (Retrieval)
+    - LLM 问答生成 (Generation)
+- **Internal API**: 提供必要的内部同步接口（如实时对话流）。
 
-### 3. 数据层 (Data Layer)
-- **PostgreSQL**: 
-    - 存储结构化数据：用户账户、文档元数据（文件名、上传时间、状态）、对话历史。
-    - **关键设计**: 所有资源表（如 `documents`, `chats`）都必须包含 `user_id` 外键。
-- **MinIO (S3 Compatible)**:
-    - 存储非结构化数据：用户上传的原始文档文件（PDF, Word 等）。
-- **ChromaDB**:
-    - 存储高维向量数据（Document Embeddings）。
-    - 支持通过 Metadata (`user_id`) 进行过滤检索。
-- **Redis**:
-    - Celery 任务队列的 Broker。
-    - 缓存热点数据。
+## 3. 数据流 (Data Flow)
 
-## 数据流 (Data Flow)
+### 3.1 文档上传流程
+1.  用户在 **Frontend** 上传 PDF。
+2.  **Java Backend** 接收文件，保存至 MinIO/本地存储，写入 MySQL 元数据。
+3.  **Java Backend** 发送 "Process Document" 消息到 **RabbitMQ**。
+4.  **Python AI Engine** 消费消息：
+    - 下载 PDF。
+    - 解析文本并进行切片。
+    - 调用 Embedding 模型生成向量。
+    - 存入向量数据库 (ChromaDB/Milvus)。
+5.  **AI Engine** 更新任务状态（通过 API 回调 Java Backend 或写入共享 Redis）。
 
-### 1. 文档上传与处理
-1. 用户上传文件 -> 后端接收 -> 存储至 MinIO。
-2. 后端在 PostgreSQL 创建文档记录 (Status: Pending)。
-3. 后端发送解析任务至 Celery 队列。
-4. Celery Worker 获取任务 -> 解析文本 -> 切片 (Chunking) -> 调用 Embedding API -> 存入 ChromaDB。
-5. 更新 PostgreSQL 文档状态为 Completed。
+### 3.2 智能问答流程
+1.  用户在 **Frontend** 发起提问。
+2.  **Java Backend** 转发请求至 **Python AI Engine** (或前端直接连接 AI Engine 的 WebSocket/SSE，视具体实现而定；建议通过 Java 转发以统一鉴权)。
+3.  **AI Engine**:
+    - 将问题向量化。
+    - 在向量库中检索相关上下文。
+    - 组装 Prompt (System + Context + User Question)。
+    - 调用 LLM (OpenAI/Qwen) 生成回答。
+4.  结果返回给前端。
 
-### 2. 问答流程 (RAG)
-1. 用户发送问题 -> 后端接收。
-2. 后端将问题向量化 -> 在 ChromaDB 中检索相关切片 (**强制带上 `user_id` 过滤条件**)。
-3. 后端构建 Prompt (包含问题 + 检索到的上下文) -> 调用 LLM。
-4. LLM 生成回答 -> 后端返回给用户。
+## 4. 技术决策
+- **为何引入 Java?** 
+    - 利用 Spring Boot 强大的生态处理复杂的企业级业务逻辑和高并发常规请求。
+    - 团队技术栈统一或性能考量。
+- **为何保留 Python?**
+    - Python 在 AI/ML 领域的绝对优势（LangChain, PyTorch, HuggingFace）。
+    - 仅作为计算节点，剥离通用业务逻辑，更轻量专注。

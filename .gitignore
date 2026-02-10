@@ -21,19 +21,28 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Python / Backend
+# Python / AI Engine
 __pycache__/
 *.py[cod]
 *$py.class
 venv/
 .venv/
 env/
-.env
 *.egg-info/
 .pytest_cache/
 .coverage
 htmlcov/
 instance/
+
+# Java / Backend (Maven)
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+.classpath
+.project
+.settings/
+.sts4-cache/
 
 # Docker
 docker-compose.override.yml
